@@ -1,0 +1,3 @@
+Menopause_group	Sample_size	Age_mean	Age_sd	Age_min	Age_max	Age_menopause_mean	Age_menopause_sd	Time_since_menopause_mean	Time_since_menopause_sd	Income_counts	HRT_counts
+PRE	752	50.9853723404255	2.35663188524135	45	59					55, 110, 209, 290, 95	759, 0
+POST	3505	55.5897289586305	2.66402713843606	47	59	49.7075606276748	4.48250179997795	5.88216833095578	4.6634550119624	1481, 3009, 3076, 2085, 592	6793, 3450
