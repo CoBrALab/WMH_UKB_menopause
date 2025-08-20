@@ -351,7 +351,7 @@ table_df = function(df_func, output) {
 # Function to generate age and WMH density plots (Figure 2BC)
 age_wmh_density = function(df_func, output, bounds_age) {
     plt_age = ggplot(df_func, aes(x=Age, color=Menopause_group)) +
-        geom_density(size=2, adjust=2) +
+        geom_density(size=2, adjust=1.2) +
         theme_classic() +
         scale_color_manual(values = color_scale_groups) +
         scale_y_continuous(name="Density") +
@@ -362,7 +362,7 @@ age_wmh_density = function(df_func, output, bounds_age) {
     print(paste0(output, "_age.png"))
 
     plt_wmh_bison = ggplot(df_func, aes(x=WMH_divTBV_log, color=Menopause_group)) +
-        geom_density(size=2, adjust=2) +
+        geom_density(size=2, adjust=1.2) +
         theme_classic() +
         scale_color_manual(values = color_scale_groups) +
         scale_y_continuous(name="Density") +
@@ -372,7 +372,7 @@ age_wmh_density = function(df_func, output, bounds_age) {
     ggsave(paste0(output, "_WMH_bison.png"), height=5, width=6)
 
     plt_wmh_UKB = ggplot(df_func, aes(x=UKB_WMH_divTBV_log, color=Menopause_group)) +
-        geom_density(size=2, adjust=2) +
+        geom_density(size=2, adjust=1.2) +
         theme_classic() +
         scale_color_manual(values = color_scale_groups) +
         scale_y_continuous(name="Density") +
@@ -382,7 +382,7 @@ age_wmh_density = function(df_func, output, bounds_age) {
     ggsave(paste0(output, "_WMH_UKB.png"), height=5, width=6)
 
     plt_wmh_UKB = ggplot(df_func, aes(x=UKB_WMH_divWM_log, color=Menopause_group)) +
-        geom_density(size=2, adjust=2) +
+        geom_density(size=2, adjust=1.2) +
         theme_classic() +
         scale_color_manual(values = color_scale_groups) +
         scale_y_continuous(name="Density") +
@@ -530,8 +530,6 @@ df_G = df_clean %>%
     ) %>%
     filter(!is.na(Menopause_group) & !is.na(Menopause_group_denise)) %>%
     glimpse()
-
-fwrite(df_G, "test.csv")
 
 summary(df_G$Menopause_group)
 summary(df_G$Menopause_group_denise)
