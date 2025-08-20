@@ -151,9 +151,18 @@ df_diagnoses = df_diagnoses %>%
     filter(icd_code %in% c("I60", "I61", "I63", "I64", "G35", "E10", "E11", "E13", "E14")) %>%
     glimpse()
 
+# Genetic sex
+df_genetic_sex = as.data.frame(fread("../../UKB/tabular/df_genetic_sex/UKBB_genetic_sex_wide.tsv"))
+df_genetic_sex = df_genetic_sex %>%
+    filter(InstanceID == 2) %>%
+    rename(ID = "SubjectID", Genetic_sex = "Genetic sex_22001") %>%
+    select(ID, Genetic_sex) %>%
+    glimpse()
+
 #### Merge ####
 df_merge = df_mri_avail %>%
-    left_join(df_demo) %>%
+    left_join(df_demo, by="ID") %>%
+    left_join(df_genetic_sex, by="ID") %>%
     left_join(df_site, by="ID") %>%
     left_join(df_mri_qc, by="ID") %>%
     left_join(df_menopause, by="ID") %>%
@@ -197,7 +206,6 @@ df_clean = df_merge %>%
         Hysterectomy = if_else(is.na(Had_menopause), "NA", if_else(Had_menopause == "Not sure - had a hysterectomy", "Yes", "No")),
         Had_menopause = if_else(Had_menopause == "" | Had_menopause == "Not sure - other reason" | Had_menopause == "Not sure - had a hysterectomy", "NA", as.character(Had_menopause)),
         Oophorectomy = if_else(Oophorectomy == "Not sure", "NA", Oophorectomy),
-        Age_menopause = if_else(Oophorectomy == "Yes", Age_oophorectomy, Age_menopause),
         hyst_no_ooph = if_else(Hysterectomy == "Yes" & Oophorectomy == "No", "Yes", "No"),
         HRT_age_ended = as.numeric(if_else(HRT_age_ended == "Still taking HRT", as.character(Age), as.character(HRT_age_ended))),
         HRT_years = log1p(if_else(HRT_used == "No", 0, HRT_age_ended - HRT_age_started)),
@@ -210,30 +218,32 @@ df_clean = df_merge %>%
         # Always exclude Hysterectomy without Oophorectomy
         Menopause_group = factor(case_when(
             # PRE = No menopause
-            hyst_no_ooph == "No" & Had_menopause == "No" & Oophorectomy == "No" ~ "PRE",
+            Had_menopause == "No" & Oophorectomy == "No" ~ "PRE",
             # POST = Menopause and no oophorectomy
-            hyst_no_ooph == "No" & Had_menopause == "Yes" & Oophorectomy == "No" ~ "POST",
+            Had_menopause == "Yes" & Oophorectomy == "No" ~ "POST",
             # POST = Menopause, oophorectomy after menopause
-            hyst_no_ooph == "No" & Had_menopause == "Yes" & Oophorectomy == "Yes" & Age_menopause < Age_oophorectomy ~ "POST",
+            Had_menopause == "Yes" & Oophorectomy == "Yes" & Age_menopause < Age_oophorectomy ~ "POST",
             # POST = Menopause, no record of oophorectomy
-            hyst_no_ooph == "No" & Had_menopause == "Yes" & is.na(Oophorectomy) ~ "POST",
+            Had_menopause == "Yes" & is.na(Oophorectomy) ~ "POST",
             # SURG = Menopause, oophorectomy before menopause
-            hyst_no_ooph == "No" & Had_menopause == "Yes" & Oophorectomy == "Yes" & Age_menopause >= Age_oophorectomy ~ "SURG",
+            Had_menopause == "Yes" & Oophorectomy == "Yes" & Age_menopause >= Age_oophorectomy ~ "SURG",
             # SURG = No menopause, oophorectomy
-            hyst_no_ooph == "No" & Had_menopause == "No" & Oophorectomy == "Yes" ~ "SURG",
+            Had_menopause == "No" & Oophorectomy == "Yes" ~ "SURG",
             # SURG = Menopause, oophorectomy, no data on age at menopause
-            hyst_no_ooph == "No" & Had_menopause == "Yes" & Oophorectomy == "Yes" & is.na(Age_menopause) ~ "SURG",
+            Had_menopause == "Yes" & Oophorectomy == "Yes" & is.na(Age_menopause) ~ "SURG",
             # SURG = No data on menopause, oophorectomy
-            hyst_no_ooph == "No" & is.na(Had_menopause) & Oophorectomy == "Yes" ~ "SURG"
+            is.na(Had_menopause) & Oophorectomy == "Yes" ~ "SURG"
         ))
     ) %>%
     # Lohner combine POST and SURG
     mutate(
+        Age_menopause = if_else(Oophorectomy == "Yes", Age_oophorectomy, Age_menopause),
         lohner_Menopause_group = factor(if_else(Menopause_group == "SURG", "POST", as.character(Menopause_group)), levels=c("PRE", "POST"))
     ) %>%
     # Change variable types
     mutate(
         Sex = factor(Sex),
+        Genetic_sex = factor(Genetic_sex),
         site = factor(site),
         Income = as.numeric(factor(Income, levels=c("Less than 18,000", "18,000 to 30,999", "31,000 to 51,999", "52,000 to 100,000", "Greater than 100,000"), labels=c(1,2,3,4,5))),
         Days_walked = as.numeric(Days_walked),
@@ -262,18 +272,16 @@ ids_stroke = df_diagnoses %>% filter(icd_code %in% c("I60", "I61", "I63", "I64")
 ids_ms = df_diagnoses %>% filter(icd_code %in% c("G35")) %>% pull(ID)
 
 df_final = df_clean %>%
-    # Remove all men (n=20990)
+    # Remove all men
     filter(Sex == "Female") %T>%
     {print(paste("Remove all men: n = ", nrow(.))); print(summary(.$Menopause_group))} %>%
     # Remove missing T1w, FLAIR, or DWI
     filter(t1w_ses2 == 1 & flair_ses2 == 1 & dMRI_ses2 == 1) %T>%
     {print(paste("Remove missing T1w, FLAIR, or DWI: n = ", nrow(.))); print(summary(.$Menopause_group))} %>%
-    # Remove motion in T1w, FLAIR, DWI
-    # filter(t1_fail == "Pass" & flair_fail == "Pass" & dwi_fail == "Pass" & is.na(WMH_divTBV_log) == FALSE & is.na(UKB_WMH_divTBV_log) == FALSE) %T>%
+    # Remove motion in T1w
     filter(t1_fail == "Pass" & is.na(WMH_divTBV_log) == FALSE & is.na(UKB_WMH_divTBV_log) == FALSE) %T>%
-    {print(paste("Remove motion in T1w, FLAIR, DWI: n = ", nrow(.))); print(summary(.$Menopause_group))} %>%
+    {print(paste("Remove motion in T1w: n = ", nrow(.))); print(summary(.$Menopause_group))} %>%
     # Diagnosis of stroke or MS
-    # filter(!ID %in% ids_diabetes) %T>%
     filter(!ID %in% ids_stroke) %T>%
     filter(!ID %in% ids_ms) %T>%
     {print(paste("Diagnosis of stroke or MS: n = ", nrow(.))); print(summary(.$Menopause_group))} %>%
@@ -291,10 +299,10 @@ df_final = df_clean %>%
     {print(paste("Missing data on age at menopause if POST or SURF: n = ", nrow(.))); print(summary(.$Menopause_group))} %>%
     # Pre-menopausal reporting HRT use
     filter(!(Menopause_group %in% c("PRE") & HRT_used == "Yes")) %T>%
-    {print(paste("Pre-menopausal reporting HRT use: n = ", nrow(.))); print(summary(.$Menopause_group))} #%>%
-    # # Pre-menopausal above 60 years old
-    # filter(!(Menopause_group %in% c("PRE") & Age > 60)) %T>%
-    # {print(paste("Pre-menopausal above 60 years old: n = ", nrow(.))); print(summary(.$Menopause_group))}
+    {print(paste("Pre-menopausal reporting HRT use: n = ", nrow(.))); print(summary(.$Menopause_group))} %>%
+    # Women with male genetic sex
+    filter(Genetic_sex != "Male" | is.na(Genetic_sex)) %T>%
+    {print(paste("Women with male genetic sex: n = ", nrow(.))); print(summary(.$Menopause_group))}
 
 #endregion
 
@@ -507,6 +515,30 @@ summary(df_F$Menopause_group)
 table_df(df_F, "./results/df_F_summary.tsv")
 age_wmh_density(df_F, "./visualization/density_F")
 
+############ G: Extra: full unmatched, same IDs as Denise's
+
+df_denise = as.data.frame(fread("../data/data_full.csv"))
+df_G = df_clean %>%
+    full_join(
+        df_denise %>%
+            select(ID, group) %>%
+            rename(Menopause_group_denise = "group"),
+        by="ID"
+    ) %>%
+    mutate(
+        Menopause_group_denise = factor(Menopause_group_denise, levels=c("premen", "postmen", "surgical"), labels=c("PRE", "POST", "SURG"))
+    ) %>%
+    filter(!is.na(Menopause_group) & !is.na(Menopause_group_denise)) %>%
+    glimpse()
+
+fwrite(df_G, "test.csv")
+
+summary(df_G$Menopause_group)
+summary(df_G$Menopause_group_denise)
+
+table_df(df_G, "./results/df_G_summary.tsv")
+age_wmh_density(df_G, "./visualization/density_G")
+
 #endregion
 
 #region Impute cardiometabolic factors
@@ -537,7 +569,7 @@ meth[!(names(meth) %in% factor_list)] = ""
 
 pred = make.predictorMatrix(df_A)
 pred[,] = 0
-pred[factor_list, c(factor_list, "Menopause_group")] = 1
+pred[factor_list, c(factor_list, "Menopause_group")] = 0 # Don't use menopause group for imputation
 
 meth["Menopause_group"] = ""
 pred["Menopause_group", ] = 0 # Don't impute menopause group
@@ -742,6 +774,21 @@ results[["sampleF_covCardio"]] = data.frame(
     )
 
 print(t(results[["sampleF_covCardio"]]))
+
+############ Sample G: Same as Denise's unmatched sample from paper
+
+# Main
+lm_result = summary(lm(scale(WMH_divTBV_log) ~ Menopause_group_denise + scale(poly(Age,2)) + Income + HRT_used + site, data=df_G))
+results[["sampleG"]] = data.frame(
+        Name = "sampleG",
+        Sample = "G",
+        coef_POST = lm_result$coefficients["Menopause_group_denisePOST", "Estimate"],
+        coef_SURG = lm_result$coefficients["Menopause_group_deniseSURG", "Estimate"],
+        pval_POST = lm_result$coefficients["Menopause_group_denisePOST", "Pr(>|t|)"],
+        pval_SURG = lm_result$coefficients["Menopause_group_deniseSURG", "Pr(>|t|)"]
+    )
+
+print(t(results[["sampleG"]]))
 
 ############ Merge results
 results = do.call(rbind, results)
@@ -1162,6 +1209,29 @@ ggplot(results, aes(x=POST_SURG, y=coef_meaning, fill=coef_sig, label=Label)) +
         strip.text.y = element_text(color = "black", size=0.1))
 ggsave("./visualization/HRT_age_meno.png", height = 5, width = 9)
 
+
+# TEST: sample G (matched IDs of Denise's unmatched sample from paper)
+ggplot(df_G, aes(x=Age, y=WMH_divTBV_log, color=Menopause_group_denise)) +
+    geom_point(size=0.5, alpha=0.2) +
+    geom_smooth(method="lm", formula=y ~ poly(x, 1)) +
+    scale_color_manual(values = color_scale_groups) +
+    scale_y_continuous(name="White Matter Hyperintensity Volume") +
+    scale_x_continuous(name="Age") +
+    guides(color = "none") + 
+    theme_classic() +
+    theme(text=element_text(size=15))
+ggsave("./visualization/age_G_lin.png", height=5, width=5)
+
+ggplot(df_G, aes(x=Age, y=WMH_divTBV_log, color=Menopause_group_denise)) +
+    geom_point(size=0.5, alpha=0.2) +
+    geom_smooth(method="lm", formula=y ~ poly(x, 2)) +
+    scale_color_manual(values = color_scale_groups) +
+    scale_y_continuous(name="White Matter Hyperintensity Volume") +
+    scale_x_continuous(name="Age") +
+    guides(color = "none") + 
+    theme_classic() +
+    theme(text=element_text(size=15))
+ggsave("./visualization/age_G_poly.png", height=5, width=5)
 
 ########### Figure 3
 
