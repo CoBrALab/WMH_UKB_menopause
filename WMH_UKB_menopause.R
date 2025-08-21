@@ -1151,7 +1151,7 @@ ggsave("./visualization/age_F_poly.png", height=5, width=5)
 # Figure 2E: WMHV - Matched sample (sample B)
 ggplot(df_B, aes(x=Menopause_group, y=WMH_divTBV_log, fill=Menopause_group)) +
     geom_violin(trim=TRUE, scale="width") + 
-    geom_boxplot(width=0.5, color="black") + 
+    geom_boxplot(width=0.2, color="black", fill="white") + 
     scale_fill_manual(values = color_scale_groups) +
     scale_y_continuous(name="White Matter Hyperintensity Volume") +
     scale_x_discrete(name="Menopausal group") +
@@ -1364,5 +1364,24 @@ plt +
         strip.text.y = element_text(color = "black", size=0.1))
 ggsave("./visualization/cardio_WMHV_byGroup.png", height = 6, width = 14)
 
+# Figure 3C: Interaction between BP medication and menopause group on WMHV
+df_tmp = df_B %>%
+    filter(!is.na(BP_med) & !is.na(Avg_systolic_BP) & !is.na(Avg_diastolic_BP))
+
+ggplot(df_tmp, aes(x=BP_med, y=WMH_divTBV_log, fill=Menopause_group)) +
+    geom_violin(trim=TRUE, scale="width") + 
+    geom_boxplot(data = df_tmp %>% filter(BP_med=="No", Menopause_group=="PRE"), width=0.05, color="black", position=position_nudge(x=-0.3), fill="white") + 
+    geom_boxplot(data = df_tmp %>% filter(BP_med=="No", Menopause_group=="POST"), width=0.05, color="black", position=position_nudge(x=0), fill="white") + 
+    geom_boxplot(data = df_tmp %>% filter(BP_med=="No", Menopause_group=="SURG"), width=0.05, color="black", position=position_nudge(x=0.3), fill="white") + 
+    geom_boxplot(data = df_tmp %>% filter(BP_med=="Yes", Menopause_group=="PRE"), width=0.05, color="black", position=position_nudge(x=-0.3), fill="white") + 
+    geom_boxplot(data = df_tmp %>% filter(BP_med=="Yes", Menopause_group=="POST"), width=0.05, color="black", position=position_nudge(x=0), fill="white") + 
+    geom_boxplot(data = df_tmp %>% filter(BP_med=="Yes", Menopause_group=="SURG"), width=0.05, color="black", position=position_nudge(x=0.3), fill="white") + 
+    scale_fill_manual(values = color_scale_groups) +
+    scale_y_continuous(name="White Matter Hyperintensity Volume") +
+    scale_x_discrete(name="Blood Pressure Medication") +
+    guides(fill = "none") + 
+    theme_classic() +
+    theme(text=element_text(size=15))
+ggsave("./visualization/BPmed_by_group.png", width=5, height=5)
 
 #endregion
