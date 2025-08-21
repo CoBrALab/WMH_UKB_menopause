@@ -1,3 +1,3 @@
-Menopause_group	Sample_size	Age_mean	Age_sd	Age_min	Age_max	Age_menopause_mean	Age_menopause_sd	Time_since_menopause_mean	Time_since_menopause_sd	Income_counts	HRT_counts
+Menopause_group	Sample_size	Age_mean	Age_sd	Age_min	Age_max	Age_menopause_mean	Age_menopause_sd	Time_since_menopause_mean	Time_since_menopause_sd	Income_counts	MHT_counts
 POST	894	63.9082774049217	6.92161186452545	47	79	50.5693512304251	4.81659135926931	13.5548098434004	7.92227177351204	1053, 2320, 2414, 1705, 500	5388, 2604
 SURG	894	63.9082774049217	6.92161186452545	47	79	46.4955257270694	6.73273846161474	17.3836206896552	8.23330207294327	132, 284, 277, 155, 46	181, 713
