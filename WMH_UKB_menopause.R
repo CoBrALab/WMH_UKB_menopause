@@ -328,7 +328,7 @@ table_df = function(df_func, output) {
             .groups = "drop"
         ) %>%
         left_join(
-            df_final %>%
+            df_func %>%
             count(Menopause_group, Income) %>%
             pivot_wider(names_from = Income, values_from = n, values_fill = 0) %>%
             mutate(Income_counts = pmap_chr(across(-Menopause_group), ~toString(na.omit(c(...))))) %>%
@@ -336,7 +336,7 @@ table_df = function(df_func, output) {
             by = "Menopause_group"
         ) %>%
         left_join(
-            df_final %>%
+            df_func %>%
             count(Menopause_group, MHT_used) %>%
             pivot_wider(names_from = MHT_used, values_from = n, values_fill = 0) %>%
             mutate(MHT_counts = pmap_chr(across(-Menopause_group), ~toString(na.omit(c(...))))) %>%
