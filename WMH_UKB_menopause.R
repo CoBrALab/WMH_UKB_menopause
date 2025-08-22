@@ -208,8 +208,7 @@ df_clean = df_merge %>%
         Oophorectomy = if_else(Oophorectomy == "Not sure", "NA", Oophorectomy),
         hyst_no_ooph = if_else(Hysterectomy == "Yes" & Oophorectomy == "No", "Yes", "No"),
         MHT_age_ended = as.numeric(if_else(MHT_age_ended == "Still taking MHT", as.character(Age), as.character(MHT_age_ended))),
-        MHT_years = log1p(if_else(MHT_used == "No", 0, MHT_age_ended - MHT_age_started)),
-        Time_since_menopause = Age - Age_menopause
+        MHT_years = log1p(if_else(MHT_used == "No", 0, MHT_age_ended - MHT_age_started))
     ) %>%
     # Fix NA strings
     mutate(across(everything(), ~na_if(.x, "NA")), across(everything(), ~na_if(.x, ""))) %>%
@@ -238,6 +237,7 @@ df_clean = df_merge %>%
     # Lohner combine POST and SURG
     mutate(
         Age_menopause = if_else(Oophorectomy == "Yes", Age_oophorectomy, Age_menopause),
+        Time_since_menopause = Age - Age_menopause,
         lohner_Menopause_group = factor(if_else(Menopause_group == "SURG", "POST", as.character(Menopause_group)), levels=c("PRE", "POST"))
     ) %>%
     # Change variable types
