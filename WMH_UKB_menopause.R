@@ -1160,6 +1160,10 @@ ggplot(df_B, aes(x=Menopause_group, y=WMH_divTBV_log, fill=Menopause_group)) +
     theme(text=element_text(size=15))
 ggsave("./visualization/WMHV_group.png", height=5, width=5)
 
+df_B %>%
+    group_by(Menopause_group) %>%
+    summarize(mean_WMH = mean(WMH_divTBV_log), sd_WMH = sd(WMH_divTBV_log), med_WMH = median(WMH_divTBV_log))
+
 # Figure 2F: MHT and age at menopause
 results = as.data.frame(fread("./results/MHT_ageMeno.tsv"))
 empty_row_1 = data.frame(Name = NA, Sample = NA, POST_SURG = "POST", coef_meaning = "Meno_group", coef = NA, pval = NA)
