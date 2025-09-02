@@ -8,6 +8,9 @@ library(MatchIt)
 library(viridis)
 library(mice)
 library(cetcolor)
+library(lme4)
+library(lmerTest)
+library(mitml)
 
 #region Load data and merge
 
@@ -303,6 +306,35 @@ df_final = df_clean %>%
     # Women with male genetic sex
     filter(Genetic_sex != "Male" | is.na(Genetic_sex)) %T>%
     {print(paste("Women with male genetic sex: n = ", nrow(.))); print(summary(.$Menopause_group))}
+
+# df_final %>%
+#     group_by(site) %>%
+#     summarize(
+#         counts = n(),
+#         mean_age = mean(Age),
+#         sd_age = sd(Age),
+#     ) %>% 
+#     left_join(
+#         df_final %>%
+#         count(site, Menopause_group) %>%
+#         group_by(site) %>%
+#         mutate(prop = n / sum(n)) %>%
+#         select(-n) %>%   # drop raw counts so they don’t sneak through
+#         pivot_wider(
+#             names_from = Menopause_group,
+#             values_from = prop,
+#             values_fill = 0
+#         ) %>%
+#         ungroup() %>%
+#         mutate(
+#             Menopause_group_props = pmap_chr(
+#             across(where(is.numeric)),
+#             ~ toString(round(c(...), 3))
+#             )
+#         ) %>%
+#         select(site, Menopause_group_props),
+#         by = "site"
+#     )
 
 #endregion
 
@@ -608,7 +640,7 @@ results = list()
 ############ Sample A: unmatched
 
 # Poly age
-lm_result = summary(lm(scale(WMH_divTBV_log) ~ Menopause_group + scale(poly(Age,2)) + Income + MHT_used + site, data=df_A))
+lm_result = summary(lmer(scale(WMH_divTBV_log) ~ Menopause_group + scale(poly(Age,2)) + Income + MHT_used + (1|site), data=df_A))
 results[["sampleA_polyAge"]] = data.frame(
         Name = "sampleA_polyAge",
         Sample = "A",
@@ -621,7 +653,7 @@ results[["sampleA_polyAge"]] = data.frame(
 print(t(results[["sampleA_polyAge"]]))
 
 # Linear age
-lm_result = summary(lm(scale(WMH_divTBV_log) ~ Menopause_group + Age + Income + MHT_used + site, data=df_A))
+lm_result = summary(lmer(scale(WMH_divTBV_log) ~ Menopause_group + Age + Income + MHT_used + (1|site), data=df_A))
 results[["sampleA_linAge"]] = data.frame(
         Name = "sampleA_linAge",
         Sample = "A",
@@ -634,14 +666,14 @@ results[["sampleA_linAge"]] = data.frame(
 print(t(results[["sampleA_linAge"]]))
 
 # Poly age + cov cardiometabolic factors
-lm_result = summary(pool(with(df_A_imputed, lm(as.formula(paste0("scale(WMH_divTBV_log) ~ Menopause_group + scale(poly(Age,2)) + Income + MHT_used + site +", cardio_factors)), subset = ID %in% df_A$ID))))
+lm_result = testEstimates(with(mids2mitml.list(df_A_imputed), lmer(as.formula(paste0("scale(WMH_divTBV_log) ~ Menopause_group + scale(poly(Age,2)) + Income + MHT_used + (1|site) +", cardio_factors)), subset = ID %in% df_A$ID)))
 results[["sampleA_polyAge_covCardio"]] = data.frame(
         Name = "sampleA_polyAge_covCardio",
         Sample = "A",
-        coef_POST = lm_result$estimate[2],
-        coef_SURG = lm_result$estimate[3],
-        pval_POST = lm_result$p.value[2],
-        pval_SURG = lm_result$p.value[3]
+        coef_POST = lm_result$estimates["Menopause_groupPOST", "Estimate"],
+        coef_SURG = lm_result$estimates["Menopause_groupSURG", "Estimate"],
+        pval_POST = lm_result$estimates["Menopause_groupPOST", "P(>|t|)"],
+        pval_SURG = lm_result$estimates["Menopause_groupSURG", "P(>|t|)"]
     )
 
 print(t(results[["sampleA_polyAge_covCardio"]]))
@@ -649,7 +681,7 @@ print(t(results[["sampleA_polyAge_covCardio"]]))
 ############ Sample B: Matched (NN)
 
 # Main
-lm_result = summary(lm(scale(WMH_divTBV_log) ~ Menopause_group + scale(poly(Age,2)) + Income + MHT_used + site, data=df_B))
+lm_result = summary(lmer(scale(WMH_divTBV_log) ~ Menopause_group + scale(poly(Age,2)) + Income + MHT_used + (1|site), data=df_B))
 results[["sampleB"]] = data.frame(
         Name = "sampleB",
         Sample = "B",
@@ -662,14 +694,14 @@ results[["sampleB"]] = data.frame(
 print(t(results[["sampleB"]]))
 
 # Cov cardiometabolic factors
-lm_result = summary(pool(with(df_A_imputed, lm(as.formula(paste0("scale(WMH_divTBV_log) ~ Menopause_group + scale(poly(Age,2)) + Income + MHT_used + site +", cardio_factors)), subset = ID %in% df_B$ID))))
+lm_result = testEstimates(with(mids2mitml.list(df_A_imputed), lmer(as.formula(paste0("scale(WMH_divTBV_log) ~ Menopause_group + scale(poly(Age,2)) + Income + MHT_used + (1|site) +", cardio_factors)), subset = ID %in% df_B$ID)))
 results[["sampleB_covCardio"]] = data.frame(
         Name = "sampleB_covCardio",
         Sample = "B",
-        coef_POST = lm_result$estimate[2],
-        coef_SURG = lm_result$estimate[3],
-        pval_POST = lm_result$p.value[2],
-        pval_SURG = lm_result$p.value[3]
+        coef_POST = lm_result$estimates["Menopause_groupPOST", "Estimate"],
+        coef_SURG = lm_result$estimates["Menopause_groupSURG", "Estimate"],
+        pval_POST = lm_result$estimates["Menopause_groupPOST", "P(>|t|)"],
+        pval_SURG = lm_result$estimates["Menopause_groupSURG", "P(>|t|)"]
     )
 
 print(t(results[["sampleB_covCardio"]]))
@@ -677,7 +709,7 @@ print(t(results[["sampleB_covCardio"]]))
 ############ Sample C: Matched (exact)
 
 # Main
-lm_result = summary(lm(scale(WMH_divTBV_log) ~ Menopause_group + scale(poly(Age,2)) + Income + MHT_used + site, data=df_C))
+lm_result = summary(lmer(scale(WMH_divTBV_log) ~ Menopause_group + scale(poly(Age,2)) + Income + MHT_used + (1|site), data=df_C))
 results[["sampleC"]] = data.frame(
         Name = "sampleC",
         Sample = "C",
@@ -690,14 +722,14 @@ results[["sampleC"]] = data.frame(
 print(t(results[["sampleC"]]))
 
 # Cov cardiometabolic factors
-lm_result = summary(pool(with(df_A_imputed, lm(as.formula(paste0("scale(WMH_divTBV_log) ~ Menopause_group + scale(poly(Age,2)) + Income + MHT_used + site +", cardio_factors)), subset = ID %in% df_C$ID))))
+lm_result = testEstimates(with(mids2mitml.list(df_A_imputed), lmer(as.formula(paste0("scale(WMH_divTBV_log) ~ Menopause_group + scale(poly(Age,2)) + Income + MHT_used + (1|site) +", cardio_factors)), subset = ID %in% df_C$ID)))
 results[["sampleC_covCardio"]] = data.frame(
         Name = "sampleC_covCardio",
         Sample = "C",
-        coef_POST = lm_result$estimate[2],
-        coef_SURG = lm_result$estimate[3],
-        pval_POST = lm_result$p.value[2],
-        pval_SURG = lm_result$p.value[3]
+        coef_POST = lm_result$estimates["Menopause_groupPOST", "Estimate"],
+        coef_SURG = lm_result$estimates["Menopause_groupSURG", "Estimate"],
+        pval_POST = lm_result$estimates["Menopause_groupPOST", "P(>|t|)"],
+        pval_SURG = lm_result$estimates["Menopause_groupSURG", "P(>|t|)"]
     )
 
 print(t(results[["sampleC_covCardio"]]))
@@ -705,7 +737,7 @@ print(t(results[["sampleC_covCardio"]]))
 ############ Sample D: POST-SURG
 
 # Main
-lm_result = summary(lm(scale(WMH_divTBV_log) ~ Menopause_group + scale(poly(Age,2)) + Income + MHT_used + site, data=df_D))
+lm_result = summary(lmer(scale(WMH_divTBV_log) ~ Menopause_group + scale(poly(Age,2)) + Income + MHT_used + (1|site), data=df_D))
 results[["sampleD"]] = data.frame(
         Name = "sampleD",
         Sample = "D",
@@ -718,14 +750,14 @@ results[["sampleD"]] = data.frame(
 print(t(results[["sampleD"]]))
 
 # Cov cardiometabolic factors
-lm_result = summary(pool(with(df_A_imputed, lm(as.formula(paste0("scale(WMH_divTBV_log) ~ Menopause_group + scale(poly(Age,2)) + Income + MHT_used + site +", cardio_factors)), subset = ID %in% df_D$ID))))
+lm_result = testEstimates(with(mids2mitml.list(df_A_imputed), lmer(as.formula(paste0("scale(WMH_divTBV_log) ~ Menopause_group + scale(poly(Age,2)) + Income + MHT_used + (1|site) +", cardio_factors)), subset = ID %in% df_D$ID)))
 results[["sampleD_covCardio"]] = data.frame(
         Name = "sampleD_covCardio",
         Sample = "D",
         coef_POST = NA,
-        coef_SURG = lm_result$estimate[2],
+        coef_SURG = lm_result$estimates["Menopause_groupSURG", "Estimate"],
         pval_POST = NA,
-        pval_SURG = lm_result$p.value[2]
+        pval_SURG = lm_result$estimates["Menopause_groupSURG", "P(>|t|)"]
     )
 
 print(t(results[["sampleD_covCardio"]]))
@@ -733,13 +765,13 @@ print(t(results[["sampleD_covCardio"]]))
 ############ Sample E: Lohner (UKB / WM WMH volumes, linear age cov, and add cardiovascular covariates)
 
 # Main
-lm_result = summary(pool(with(df_A_imputed, lm(scale(UKB_WMH_divWM_log) ~ lohner_Menopause_group + scale(Age) + Income + site + High_BP + Smoking_status + Ever_smoked + Pack_years_smoking + BMI, subset = ID %in% df_E$ID))))
+lm_result = testEstimates(with(mids2mitml.list(df_A_imputed), lmer(scale(UKB_WMH_divWM_log) ~ lohner_Menopause_group + scale(Age) + Income + (1|site) + High_BP + Smoking_status + Ever_smoked + Pack_years_smoking + BMI, subset = ID %in% df_E$ID)))
 results[["sampleE_covCardio_UKBWMH"]] = data.frame(
         Name = "sampleE_covCardio_UKBWMH",
         Sample = "E",
-        coef_POST = lm_result$estimate[2],
+        coef_POST = lm_result$estimates["lohner_Menopause_groupPOST", "Estimate"],
         coef_SURG = NA,
-        pval_POST = lm_result$p.value[2],
+        pval_POST = lm_result$estimates["lohner_Menopause_groupPOST", "P(>|t|)"],
         pval_SURG = NA
     )
 
@@ -748,7 +780,7 @@ print(t(results[["sampleE_covCardio_UKBWMH"]]))
 ############ Sample F: Time since menopause > 5 years
 
 # Main
-lm_result = summary(lm(scale(WMH_divTBV_log) ~ Menopause_group + scale(poly(Age,2)) + Income + MHT_used + site, data=df_F))
+lm_result = summary(lmer(scale(WMH_divTBV_log) ~ Menopause_group + scale(poly(Age,2)) + Income + MHT_used + (1|site), data=df_F))
 results[["sampleF"]] = data.frame(
         Name = "sampleF",
         Sample = "F",
@@ -761,14 +793,14 @@ results[["sampleF"]] = data.frame(
 print(t(results[["sampleF"]]))
 
 # Cov cardiometabolic factors
-lm_result = summary(pool(with(df_A_imputed, lm(as.formula(paste0("scale(WMH_divTBV_log) ~ Menopause_group + scale(poly(Age,2)) + Income + MHT_used + site +", cardio_factors)), subset = ID %in% df_F$ID))))
+lm_result = testEstimates(with(mids2mitml.list(df_A_imputed), lmer(as.formula(paste0("scale(WMH_divTBV_log) ~ Menopause_group + scale(poly(Age,2)) + Income + MHT_used + (1|site) +", cardio_factors)), subset = ID %in% df_F$ID)))
 results[["sampleF_covCardio"]] = data.frame(
         Name = "sampleF_covCardio",
         Sample = "F",
-        coef_POST = lm_result$estimate[2],
-        coef_SURG = lm_result$estimate[3],
-        pval_POST = lm_result$p.value[2],
-        pval_SURG = lm_result$p.value[3]
+        coef_POST = lm_result$estimates["Menopause_groupPOST", "Estimate"],
+        coef_SURG = lm_result$estimates["Menopause_groupSURG", "Estimate"],
+        pval_POST = lm_result$estimates["Menopause_groupPOST", "P(>|t|)"],
+        pval_SURG = lm_result$estimates["Menopause_groupSURG", "P(>|t|)"]
     )
 
 print(t(results[["sampleF_covCardio"]]))
@@ -776,7 +808,7 @@ print(t(results[["sampleF_covCardio"]]))
 ############ Sample G: Same as Denise's unmatched sample from paper
 
 # Main
-lm_result = summary(lm(scale(WMH_divTBV_log) ~ Menopause_group_denise + scale(poly(Age,2)) + Income + MHT_used + site, data=df_G))
+lm_result = summary(lmer(scale(WMH_divTBV_log) ~ Menopause_group_denise + scale(poly(Age,2)) + Income + MHT_used + (1|site), data=df_G))
 results[["sampleG"]] = data.frame(
         Name = "sampleG",
         Sample = "G",
@@ -799,7 +831,7 @@ fwrite(results, "./results/group_diffs.tsv", row.names=FALSE, col.names=TRUE, qu
 results = list()
 
 # Age (POST-SURG)
-lm_result = summary(lm(scale(WMH_divTBV_log) ~ scale(Age) + Income + MHT_used + site, data=df_D))
+lm_result = summary(lmer(scale(WMH_divTBV_log) ~ scale(Age) + Income + MHT_used + (1|site), data=df_D))
 results[["Age"]] = data.frame(
         Name = "Age",
         Sample = "D",
@@ -812,7 +844,7 @@ results[["Age"]] = data.frame(
 print(t(results[["Age"]]))
 
 # Age (POST)
-lm_result = summary(lm(scale(WMH_divTBV_log) ~ scale(Age) + Income + MHT_used + site, data=df_D %>% filter(Menopause_group == "POST")))
+lm_result = summary(lmer(scale(WMH_divTBV_log) ~ scale(Age) + Income + MHT_used + (1|site), data=df_D %>% filter(Menopause_group == "POST")))
 results[["Age_POST"]] = data.frame(
         Name = "Age_POST",
         Sample = "D",
@@ -825,7 +857,7 @@ results[["Age_POST"]] = data.frame(
 print(t(results[["Age_POST"]]))
 
 # Age (SURG)
-lm_result = summary(lm(scale(WMH_divTBV_log) ~ scale(Age) + Income + MHT_used + site, data=df_D %>% filter(Menopause_group == "SURG")))
+lm_result = summary(lmer(scale(WMH_divTBV_log) ~ scale(Age) + Income + MHT_used + (1|site), data=df_D %>% filter(Menopause_group == "SURG")))
 results[["Age_SURG"]] = data.frame(
         Name = "Age_SURG",
         Sample = "D",
@@ -838,7 +870,7 @@ results[["Age_SURG"]] = data.frame(
 print(t(results[["Age_SURG"]]))
 
 # Age at menopause (sample D)
-lm_result = summary(lm(scale(WMH_divTBV_log) ~ scale(Age_menopause) + scale(poly(Age, 2)) + Income + MHT_used + site, data=df_D))
+lm_result = summary(lmer(scale(WMH_divTBV_log) ~ scale(Age_menopause) + scale(poly(Age, 2)) + Income + MHT_used + (1|site), data=df_D))
 results[["Age_meno"]] = data.frame(
         Name = "Age_meno",
         Sample = "D",
@@ -851,7 +883,7 @@ results[["Age_meno"]] = data.frame(
 print(t(results[["Age_meno"]]))
 
 # Age at menopause in POST (sample D)
-lm_result = summary(lm(scale(WMH_divTBV_log) ~ scale(Age_menopause) + scale(poly(Age, 2)) + Income + MHT_used + site, data=df_D %>% filter(Menopause_group == "POST")))
+lm_result = summary(lmer(scale(WMH_divTBV_log) ~ scale(Age_menopause) + scale(poly(Age, 2)) + Income + MHT_used + (1|site), data=df_D %>% filter(Menopause_group == "POST")))
 results[["Age_meno_POST"]] = data.frame(
         Name = "Age_meno_POST",
         Sample = "D",
@@ -864,7 +896,7 @@ results[["Age_meno_POST"]] = data.frame(
 print(t(results[["Age_meno_POST"]]))
 
 # Age at menopause in SURG (sample D)
-lm_result = summary(lm(scale(WMH_divTBV_log) ~ scale(Age_menopause) + scale(poly(Age, 2)) + Income + MHT_used + site, data=df_D %>% filter(Menopause_group == "SURG")))
+lm_result = summary(lmer(scale(WMH_divTBV_log) ~ scale(Age_menopause) + scale(poly(Age, 2)) + Income + MHT_used + (1|site), data=df_D %>% filter(Menopause_group == "SURG")))
 results[["Age_meno_SURG"]] = data.frame(
         Name = "Age_meno_SURG",
         Sample = "D",
@@ -877,7 +909,7 @@ results[["Age_meno_SURG"]] = data.frame(
 print(t(results[["Age_meno_SURG"]]))
 
 # Age at menopause by group interaction (sample D)
-lm_result = summary(lm(scale(WMH_divTBV_log) ~ scale(Age_menopause) * Menopause_group + scale(poly(Age, 2)) + Income + MHT_used + site, data=df_D))
+lm_result = summary(lmer(scale(WMH_divTBV_log) ~ scale(Age_menopause) * Menopause_group + scale(poly(Age, 2)) + Income + MHT_used + (1|site), data=df_D))
 results[["Age_meno_groupInter"]] = data.frame(
         Name = "Age_meno_groupInter",
         Sample = "D",
@@ -890,7 +922,7 @@ results[["Age_meno_groupInter"]] = data.frame(
 print(t(results[["Age_meno_groupInter"]]))
 
 # MHT (sample D)
-lm_result = summary(lm(scale(WMH_divTBV_log) ~ MHT_used + Menopause_group + scale(poly(Age,2)) + Income + Age_menopause + site, data=df_D))
+lm_result = summary(lmer(scale(WMH_divTBV_log) ~ MHT_used + Menopause_group + scale(poly(Age,2)) + Income + Age_menopause + (1|site), data=df_D))
 results[["MHT_covGroup"]] = data.frame(
         Name = "MHT_covGroup",
         Sample = "D",
@@ -903,7 +935,7 @@ results[["MHT_covGroup"]] = data.frame(
 print(t(results[["MHT_covGroup"]]))
 
 # MHT in POST (sample D)
-lm_result = summary(lm(scale(WMH_divTBV_log) ~ MHT_used + scale(poly(Age,2)) + Income + Age_menopause + site, data=df_D %>% filter(Menopause_group == "POST")))
+lm_result = summary(lmer(scale(WMH_divTBV_log) ~ MHT_used + scale(poly(Age,2)) + Income + Age_menopause + (1|site), data=df_D %>% filter(Menopause_group == "POST")))
 results[["MHT_inPOST"]] = data.frame(
         Name = "MHT_inPOST",
         Sample = "D",
@@ -916,7 +948,7 @@ results[["MHT_inPOST"]] = data.frame(
 print(t(results[["MHT_inPOST"]]))
 
 # MHT in SURG (sample D)
-lm_result = summary(lm(scale(WMH_divTBV_log) ~ MHT_used + scale(poly(Age,2)) + Income + Age_menopause + site, data=df_D %>% filter(Menopause_group == "SURG")))
+lm_result = summary(lmer(scale(WMH_divTBV_log) ~ MHT_used + scale(poly(Age,2)) + Income + Age_menopause + (1|site), data=df_D %>% filter(Menopause_group == "SURG")))
 results[["MHT_inSURG"]] = data.frame(
         Name = "MHT_inSURG",
         Sample = "D",
@@ -929,7 +961,7 @@ results[["MHT_inSURG"]] = data.frame(
 print(t(results[["MHT_inSURG"]]))
 
 # MHT group interaction (sample D)
-lm_result = summary(lm(scale(WMH_divTBV_log) ~ MHT_used * Menopause_group + scale(poly(Age,2)) + Income + Age_menopause + site, data=df_D))
+lm_result = summary(lmer(scale(WMH_divTBV_log) ~ MHT_used * Menopause_group + scale(poly(Age,2)) + Income + Age_menopause + (1|site), data=df_D))
 results[["MHT_groupInter"]] = data.frame(
         Name = "MHT_groupInter",
         Sample = "D",
@@ -942,7 +974,7 @@ results[["MHT_groupInter"]] = data.frame(
 print(t(results[["MHT_groupInter"]]))
 
 # MHT by age at menopause interaction in POST (sample D)
-lm_result = summary(lm(scale(WMH_divTBV_log) ~ MHT_used * Age_menopause + scale(poly(Age,2)) + Income + site, data=df_D  %>% filter(Menopause_group == "POST")))
+lm_result = summary(lmer(scale(WMH_divTBV_log) ~ MHT_used * Age_menopause + scale(poly(Age,2)) + Income + (1|site), data=df_D  %>% filter(Menopause_group == "POST")))
 results[["MHT_ageMenoInter_POST"]] = data.frame(
         Name = "MHT_ageMenoInter_POST",
         Sample = "D",
@@ -955,7 +987,7 @@ results[["MHT_ageMenoInter_POST"]] = data.frame(
 print(t(results[["MHT_ageMenoInter_POST"]]))
 
 # MHT by age at menopause interaction in SURG (sample D)
-lm_result = summary(lm(scale(WMH_divTBV_log) ~ MHT_used * Age_menopause + scale(poly(Age,2)) + Income + site, data=df_D  %>% filter(Menopause_group == "SURG")))
+lm_result = summary(lmer(scale(WMH_divTBV_log) ~ MHT_used * Age_menopause + scale(poly(Age,2)) + Income + (1|site), data=df_D  %>% filter(Menopause_group == "SURG")))
 results[["MHT_ageMenoInter_SURG"]] = data.frame(
         Name = "MHT_ageMenoInter_SURG",
         Sample = "D",
@@ -968,7 +1000,7 @@ results[["MHT_ageMenoInter_SURG"]] = data.frame(
 print(t(results[["MHT_ageMenoInter_SURG"]]))
 
 # Menopause status (sample D)
-lm_result = summary(lm(scale(WMH_divTBV_log) ~ Menopause_group + scale(poly(Age,2)) + Income + MHT_used + site, data=df_D))
+lm_result = summary(lmer(scale(WMH_divTBV_log) ~ Menopause_group + scale(poly(Age,2)) + Income + MHT_used + (1|site), data=df_D))
 results[["Meno_group"]] = data.frame(
         Name = "Meno_group",
         Sample = "D",
@@ -1019,7 +1051,7 @@ for (f in 1:length(factor_list)) {
         rename(cardio_factor = factor_list[f]) %>%
         filter(is.na(cardio_factor) == FALSE)
     
-    lm_result = summary(lm(scale(WMH_divTBV_log) ~ scale(as.numeric(cardio_factor)) + scale(poly(Age,2)) + Income + MHT_used + site, data = df_tmp))
+    lm_result = summary(lmer(scale(WMH_divTBV_log) ~ scale(as.numeric(cardio_factor)) + scale(poly(Age,2)) + Income + MHT_used + (1|site), data = df_tmp))
 
     results[[factor_list[f]]] = data.frame(
             Factor = factor_list[f],
@@ -1046,15 +1078,15 @@ for (f in 1:length(factor_list)) {
         rename(cardio_factor = factor_list[f]) %>%
         filter(is.na(cardio_factor) == FALSE)
 
-    lm_result = summary(lm(scale(WMH_divTBV_log) ~ scale(as.numeric(cardio_factor)) * Menopause_group + scale(poly(Age,2)) + Income + MHT_used + site, data = df_tmp))
+    lm_result = summary(lmer(scale(WMH_divTBV_log) ~ scale(as.numeric(cardio_factor)) * Menopause_group + scale(poly(Age,2)) + Income + MHT_used + (1|site), data = df_tmp))
 
     results[[factor_list[f]]] = data.frame(
             Factor = factor_list[f],
             Sample = "B",
-            coef_post = lm_result$coefficients[11,"Estimate"],
-            coef_surg = lm_result$coefficients[12,"Estimate"],
-            pval_post = lm_result$coefficients[11,"Pr(>|t|)"],
-            pval_surg = lm_result$coefficients[12,"Pr(>|t|)"],
+            coef_post = lm_result$coefficients[9,"Estimate"],
+            coef_surg = lm_result$coefficients[10,"Estimate"],
+            pval_post = lm_result$coefficients[9,"Pr(>|t|)"],
+            pval_surg = lm_result$coefficients[10,"Pr(>|t|)"],
             n_PRE = nrow(df_tmp %>% filter(Menopause_group == "PRE")),
             n_POST = nrow(df_tmp %>% filter(Menopause_group == "POST")),
             n_SURG = nrow(df_tmp %>% filter(Menopause_group == "SURG"))
@@ -1068,7 +1100,7 @@ fwrite(results, "./results/cardio_WMHV_group_inter.tsv", row.names=FALSE, col.na
 df_tmp = df_B %>%
     filter(!is.na(BP_med) & !is.na(Avg_systolic_BP) & !is.na(Avg_diastolic_BP))
 
-lm_result = summary(lm(scale(WMH_divTBV_log) ~ Menopause_group * scale(as.numeric(BP_med)) + Avg_systolic_BP + Avg_diastolic_BP + scale(poly(Age,2)) + Income + site, data=df_tmp))
+lm_result = summary(lmer(scale(WMH_divTBV_log) ~ Menopause_group * scale(as.numeric(BP_med)) + Avg_systolic_BP + Avg_diastolic_BP + scale(poly(Age,2)) + Income + (1|site), data=df_tmp))
 results = data.frame(
         Name = "BPmed_byGroup",
         Sample = "B",
